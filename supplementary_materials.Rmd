@@ -1,0 +1,1179 @@
+---
+title: "Supplementary Materials"
+author: "Tyrel Stokes"
+date: "March 18, 2020"
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{amssymb}
+   - \usepackage{graphicx}
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning =FALSE)
+require(ggplot2)
+require(latex2exp)
+require(xtable)
+require(foreign)
+require(tidyverse)
+require(stargazer)
+require(stats)
+require(MASS)
+
+
+```
+
+```{r useful functions, echo = FALSE}
+sqr <- function(x){
+  sum(x^2)
+}
+```
+
+
+```{r raincloud plots, echo = FALSE, include =FALSE}
+### This code is the necessary background to display the raincloud plots
+### This code comes from https://github.com/RainCloudPlots/RainCloudPlots
+
+# Check if required packages are installed ----
+packages <- c("cowplot", "readr", "ggplot2", "dplyr", "lavaan", "smooth", "Hmisc")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))
+}
+
+# Load packages ----
+library(ggplot2)
+library(cowplot)
+library(readr)
+library(dplyr)
+library(lavaan)
+library(smooth)
+library(Hmisc)
+
+# Defining the geom_flat_violin function ----
+# Note: the below code modifies the
+# existing github page by removing a parenthesis in line 50
+
+"%||%" <- function(a, b) {
+  if (!is.null(a)) a else b
+}
+
+geom_flat_violin <- function(mapping = NULL, data = NULL, stat = "ydensity",
+                             position = "dodge", trim = TRUE, scale = "area",
+                             show.legend = NA, inherit.aes = TRUE, ...) {
+  layer(
+    data = data,
+    mapping = mapping,
+    stat = stat,
+    geom = GeomFlatViolin,
+    position = position,
+    show.legend = show.legend,
+    inherit.aes = inherit.aes,
+    params = list(
+      trim = trim,
+      scale = scale,
+      ...
+    )
+  )
+}
+
+#' @rdname ggplot2-ggproto
+#' @format NULL
+#' @usage NULL
+#' @export
+GeomFlatViolin <-
+  ggproto("GeomFlatViolin", Geom,
+          setup_data = function(data, params) {
+            data$width <- data$width %||%
+              params$width %||% (resolution(data$x, FALSE) * 0.9)
+            
+            # ymin, ymax, xmin, and xmax define the bounding rectangle for each group
+            data %>%
+              group_by(group) %>%
+              mutate(
+                ymin = min(y),
+                ymax = max(y),
+                xmin = x,
+                xmax = x + width / 2
+              )
+          },
+          
+          draw_group = function(data, panel_scales, coord) {
+            # Find the points for the line to go all the way around
+            data <- transform(data,
+                              xminv = x,
+                              xmaxv = x + violinwidth * (xmax - x)
+            )
+            
+            # Make sure it's sorted properly to draw the outline
+            newdata <- rbind(
+              plyr::arrange(transform(data, x = xminv), y),
+              plyr::arrange(transform(data, x = xmaxv), -y)
+            )
+            
+            # Close the polygon: set first and last point the same
+            # Needed for coord_polar and such
+            newdata <- rbind(newdata, newdata[1, ])
+            
+            ggplot2:::ggname("geom_flat_violin", GeomPolygon$draw_panel(newdata, panel_scales, coord))
+          },
+          
+          draw_key = draw_key_polygon,
+          
+          default_aes = aes(
+            weight = 1, colour = "grey20", fill = "white", size = 0.5,
+            alpha = NA, linetype = "solid"
+          ),
+          
+          required_aes = c("x", "y")
+  )
+
+```
+
+
+```{r raincloud meyers, echo =FALSE}
+
+raincloud_meyers_sim <- function(results, Ba, zero){
+
+  if(zero ==TRUE){
+ggplot(results,aes(x=Model,y=Estimates, fill = Model, col=Model))+
+  geom_flat_violin(position = position_nudge(x = .2, y = 0),adjust =
+                     2)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  ylab(TeX(paste0("$\\hat{\\beta}_a$", " Estimates")))+xlab('Model')+coord_flip()+theme_cowplot()+guides(fill = FALSE)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+
+  scale_colour_discrete(guide = guide_legend(reverse = TRUE))+geom_hline(yintercept = 0,size =1, col = "red", size=1)+geom_hline(yintercept = Ba, size =1, col ="blue")+
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5)
+    
+  }else{
+    ggplot(results,aes(x=Model,y=Estimates, fill = Model, col=Model))+
+  geom_flat_violin(position = position_nudge(x = .2, y = 0),adjust =
+                     2)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  ylab(TeX(paste0("$\\hat{\\beta}_a$", " Estimates")))+xlab('Model')+coord_flip()+theme_cowplot()+guides(fill = FALSE)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+
+  scale_colour_discrete(guide = guide_legend(reverse = TRUE))+geom_hline(yintercept = Ba, size =1, col ="blue")+
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5)
+    
+    
+  }
+  #+
+  #theme(legend.position = c(0.01, 0.7))+
+  #expand_limits(y= -.15)
+
+}
+
+
+```
+
+
+
+```{r normaldag, echo = FALSE}
+
+normaldag_sim <- function(Ba,Bu,B_bav,gamma_u,gamma_bav,n,alpha_a,alpha_bav,alpha_u,alpha_y,
+                          sigU,sigBAV,sigA,sigY){
+  
+  bav <- matrix(rnorm(n*length(B_bav),alpha_bav,sigBAV),n,length(B_bav))
+  U <- rnorm(n,alpha_u,sigU) 
+  
+  mu1 <- sqrt(sigA^2-gamma_u^2*sigU^2-sqr(gamma_bav*sigBAV))
+  e2 <- rnorm(n,0,mu1)
+  
+  A <- alpha_a + U*gamma_u + bav%*%gamma_bav + e2
+  mu2 <- sqrt(sigY^2-Ba^2*sigA^2-Bu^2*sigU^2-sqr(B_bav*sigBAV)-2*Ba*Bu*gamma_u*sigU^2 -sum(2*Ba*B_bav*gamma_bav*sigBAV^2))
+  
+  e1 <- rnorm(n,0,mu2)
+  Y <- alpha_y + A*Ba + U*Bu + bav%*%B_bav + e1 
+  
+  assign("Y",Y,envir=.GlobalEnv)
+  assign("U",U,envir=.GlobalEnv)
+  assign("A",A,envir=.GlobalEnv)
+  assign("bav",bav,envir=.GlobalEnv)
+  
+  assign("mu1",mu1,envir=.GlobalEnv)
+  assign("mu2",mu2,envir=.GlobalEnv)
+  
+  assign("e1",e1,envir=.GlobalEnv)
+  assign("e2",e2,envir=.GlobalEnv)
+}
+
+```
+
+
+
+```{r meyersfunction, echo = FALSE}
+
+####################################
+
+#### Function which simulates from Meyers DAG (normal variables) 1 single time. Looping through gives us 
+#### simulations with many replications.
+##################################
+
+## The length of psi_bav determins the number of bias amplifying variables
+
+meyers_sim <- function(sigBAV,sigY, sigA, sigU, alpha_a, alpha_u, alpha_bav,
+                       gamma_bav,psi_bav,n,Ba,Bu,gamma_u){
+  
+  sigmu3 <- sqrt(sigU^2 - sqr(psi_bav)*sigBAV^2)
+  sigmu2 <- sqrt(sigA^2 - sqr(gamma_u)*sigU^2 - sqr(gamma_bav)*sigBAV^2 - sum(2*psi_bav*gamma_u*gamma_bav*sigBAV^2))
+  sigmu1 <- sqrt(sigY^2 - Ba^2*sigA^2 - Bu^2*sigU^2 - 2*Ba*Bu*(gamma_u*sigU^2 + sum(gamma_bav*psi_bav))*sigBAV^2)
+  
+  
+  bav <- matrix(rnorm(n*length(psi_bav),alpha_bav,sigBAV),n,length(psi_bav))
+  
+  U <- alpha_u + bav%*%psi_bav+ rnorm(n,0,sigmu3)
+  A <- alpha_a + gamma_u*U + bav%*%gamma_bav + rnorm(n,0,sigmu2)
+  Y <- alpha_y + Ba*A + Bu*U + rnorm(n,0,sigmu1)
+  
+  assign("Y",Y,envir=.GlobalEnv)
+  assign("U",U,envir=.GlobalEnv)
+  assign("A",A,envir=.GlobalEnv)
+  assign("bav",bav,envir=.GlobalEnv)
+}
+
+
+meyers_check <- function(sigBAV,sigY, sigA, sigU, alpha_a, alpha_u, alpha_bav,
+                       gamma_bav,psi_bav,n,Ba,Bu,gamma_u){
+  
+   sigmu3 <- sqrt(sigU^2 - sqr(psi_bav)*sigBAV^2)
+  sigmu2 <- sqrt(sigA^2 - sqr(gamma_u)*sigU^2 - sqr(gamma_bav)*sigBAV^2 - sum(2*psi_bav*gamma_u*gamma_bav*sigBAV^2))
+  sigmu1 <- sqrt(sigY^2 - Ba^2*sigA^2 - Bu^2*sigU^2 - 2*Ba*Bu*(gamma_u*sigU^2 + sum(gamma_bav*psi_bav))*sigBAV^2)
+  
+  if((sigmu1>0) & (sigmu2 >0) & (sigmu3 >0)){
+    print("Valid Parameters")
+    
+    expected_estimates <- vector(length = 3)
+    expected_estimates[1] <- Ba
+    expected_estimates[2] <- Ba + Bu*(gamma_u*sigU^2 + sum(gamma_bav*psi_bav*sigBAV^2))/sigA^2
+    expected_estimates[3] <- Ba + Bu*(gamma_u*(sigU^2 - sum(psi_bav^2*sigBAV^2)))/(sigA^2 - sum((gamma_bav+gamma_u*psi_bav)^2)*sigBAV^2)
+    
+    names(expected_estimates) <- c("Unbiased Model", "Naive Model", "Conditional Model")
+    
+    bias <- abs(expected_estimates - Ba)
+    names(bias) <- c("Unbiased Model abs Bias", "Naive Model abs Bias", "Conditional Model abs Bias")
+    print(expected_estimates)
+    print(bias)
+    
+    models <- c("Y ~ A + U", "Y ~ A", "Y ~ A + BAV")
+    df1 <- data.frame(Model = models, expectation = expected_estimates)
+  assign("Meyers_Exp",df1,envir=.GlobalEnv)
+  assign("Meyers_Abs_Bias",bias,envir=.GlobalEnv)
+    
+  }else{
+    cond1 <- (sigmu1>0)
+    cond2 <- (sigmu2>0)
+    cond3 <- (sigmu3>0)
+    if(cond1 ==TRUE){
+      print("Outcome Variance is Valid")
+    }else{
+      print("Outcome Variance is not Valid")
+      paste0("Calculated Outcome standard deviation is ", sigmu1)
+    }
+   
+      if(cond2 ==TRUE){
+      print("Treatment Variance is Valid")
+    }else{
+      print("Treatment Variance is not Valid")
+      paste0("Calculated Treatment standard deviation is ", sigmu2)
+    }
+    
+      if(cond3 ==TRUE){
+      print("Unmeasured Confounding Variance is Valid")
+    }else{
+      print("Unmeasured Confounding Variance is not Valid")
+      paste0("Calculated Unmeasured Confounding standard deviation is ", sigmu3)
+    }
+  }
+  
+                       }
+
+```
+
+
+
+```{r fig6plot, echo = FALSE}
+
+fig6_fun <- function(results_fig6,Ba, sigA1,sigA2,gu1,gu2){
+m1 <- mean(mat_a[,1])
+m2 <- mean(mat_b[,1])
+m3 <- mean(mat_c[,1])
+
+ggplot(results_fig6[results_fig6$model == "Y ~ A + BAV",],aes(x=type,y=sim, fill = type, col=type))+
+  geom_flat_violin(position = position_nudge(x = .2, y = 0),adjust =
+                     2)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  ylab(TeX(paste0("$\\beta_a$", " simulation estimates")))+xlab('Group')+coord_flip()+theme_cowplot()+guides(fill = FALSE)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+
+  scale_colour_discrete(labels = unname(TeX(c(paste0(paste0("$\\gamma_u = $",gu1),(paste0(",$\\sigma_a^2 = $",sigA1^2))),
+                                              paste0(paste0("$\\gamma_u = $",gu2),(paste0(",$\\sigma_a^2 = $",sigA2^2))),
+                                              paste0(paste0("$\\gamma_u = $",gu2),(paste0(",$\\sigma_a^2 = $",sigA1^2)))))),
+                        guide = guide_legend(reverse = TRUE))+geom_hline(yintercept = Ba,size =1)+
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5)+
+  theme(legend.position = c(0.01, 0.7))+
+  expand_limits(y= -.15) + annotate("text", label = paste0("Mean = ",round(m2,2)),x= 3.3, y= m2, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m3,2)),x= 2.3, y= m3, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m1,2)),x= 1.3, y= m1, color = "black")+
+  annotate("text", label = paste0)
+
+}
+
+```
+
+
+
+```{r fig 6b plot, echo = FALSE}
+
+fig_6b <- function(mat_a,mat_a1, mat_b, mat_b1, mat_c, mat_c1, Ba,gu1,gu2,sigA1,sigA2){
+
+comb1 <- mat_a
+comb1$sim <- abs(mat_a$sim - Ba) - abs(mat_a1$sim - Ba)
+
+
+comb2 <- mat_b
+comb2$sim <- abs(mat_b$sim - Ba) - abs(mat_b1$sim - Ba)
+
+comb3 <- mat_c
+comb3$sim <- abs(mat_c$sim - Ba) - abs(mat_c1$sim - Ba)
+
+
+m1 <- mean(comb1[,1])
+m2 <- mean(comb2[,1])
+m3 <- mean(comb3[,1])
+
+totcomb <- rbind(comb1,comb2,comb3)
+
+
+ggplot(totcomb,aes(x=type,y=sim, fill = type, col=type))+
+  geom_flat_violin(position = position_nudge(x = .2, y = 0),adjust =
+                     2)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  ylab(TeX(paste0("$|\\hat{\\beta^{|bav}_a} - \\beta_a| - |\\hat{\\beta^{naive}_a} - \\beta_a|$", " ")))+xlab('Group')+coord_flip()+theme_cowplot()+guides(fill = FALSE)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+
+  scale_colour_discrete(labels = unname(TeX(c(paste0(paste0("$\\gamma_u = $",gu1),(paste0(",$\\sigma_a^2 = $",sigA1^2))),
+                                              paste0(paste0("$\\gamma_u = $",gu2),(paste0(",$\\sigma_a^2 = $",sigA2^2))),
+                                              paste0(paste0("$\\gamma_u = $",gu2),(paste0(",$\\sigma_a^2 = $",sigA1^2)))))),
+                        guide = guide_legend(reverse = TRUE))+geom_hline(yintercept = 0,size =1)+
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5)+
+  theme(legend.position = c(0.01, 0.7))+
+  expand_limits(y= -.15) + annotate("text", label = paste0("Mean = ",round(m2,2)),x= 3.3, y= m2, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m3,2)),x= 2.3, y= m3, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m1,2)),x= 1.3, y= m1, color = "black")+
+  annotate("text", label = paste0)
+
+
+}
+
+
+
+```
+
+
+
+This markdown document contains the code to reproduce the simulations in the article Causal Simulations: Lessons from Bias Amplifications. In addition to the figure code, there is code to easily simulate from all of the DAGs in article. Displayed is the code setting the parameters. The background code to simulate the data can be seen by accessing the r markdown document directly. For presentation, the background code is set to not echo. Similarly, there may be cosmetic differences in the graphs displayed in this r markdown document than those in the paper and in some cases the sample size and replications for the simulation experiments is smaller so the document compiles faster, but the underlying data is generated in an identical way. The context for the simulations is not elaborated on here as this is meant to be a companion for the text. Feel free to use and adapt this code to perform other simulations. 
+
+
+### Simulation 1: Figure 2 in the article
+
+This is the code to produce simulations like those in figure 2, simulating from the Meyers (2011) DAG as shown in figure 1 and the structural equations (1), (2), and (3) from the text reproduced below.
+
+
+</center>
+![Meyers DAG with Many potential Bias Amplifying variables. This is figure 1 in the paper](DAG_meyers_many.png)
+</center>
+
+
+\begin{align}
+    \boldsymbol{Y} &= \alpha_y + \boldsymbol{A}\beta_a + \boldsymbol{U}\beta_u + \epsilon_1\label{eq1: big meyers}, \\
+    \boldsymbol{A} &= \alpha_a + \boldsymbol{U}\gamma_u + \sum_{i=1}^{10}\boldsymbol{BAV_i}\gamma_{bav_i} + \epsilon_2\label{eq2: big meyers}, \\
+    \boldsymbol{U} &= \alpha_u + \sum_{i=1}^{10}\boldsymbol{BAV_i}\psi_{bav_i} + \epsilon_3, \label{eq3: big meyers}
+\end{align}
+
+
+
+```{r simulation 1 parameters}
+### These parameters refer to the coefficients in the equations above
+psi_bav <- c(-0.55,-0.45,-0.3,0.3,0.25,0.2,-0.2,0.2,-0.15,0.10) ### The coefficients from BAV to U
+gamma_bav <- c(-0.1,-0.15, -0.1,0.21,-0.2,0.3,-0.2,-0.15,-0.2,0.075) ### The coefficients from 
+Ba <- 0.7 # true treatment effect
+Bu <- -0.5 # unmeasured confounding from 
+gamma_u <- 0.59
+
+
+## Below sets the true standard deviations. The code can be easily adapted to allow the BAVs to have 
+## different standard deviations and means in the meyers simfunction code block above.
+sigBAV <- 1
+sigY <- 1
+sigU <- 1
+sigA <- 1
+
+# Set the intercept terms
+alpha_a <- 0
+alpha_u <- 0
+alpha_bav <- 0 
+alpha_y <- 0
+###############################################################################
+N <- 500 # number of simulation replications. N = 5000 was used in the paper
+n <- 500 # sample size in each replication. n = 5000 was used in the paper
+###################################
+
+
+```
+Now that the parameter values are set, you can use the function meyers_check to make sure your parameters are valid. By valid meaning that they are feasible given the variances you set for the different variables. If the parameters are valid, the below code will show you the expected estimates and absolute bias of the estimates from the unbiased ($Y \sim A + U$), naive ($Y \sim A $), and conditional model ($Y \sim A + BAV$). These expectations are exact when the underlying distributions are all normal. They remain valid in the probability limit if one is to alter the distributions in the simulation code.
+
+If the parameters are not valid, the code will tell you which of the variances is not feasible. Then you may adjust the variances or the parameters underlying the variance to ensure a valid simulation.
+
+```{r}
+meyers_check(sigBAV,sigY, sigA, sigU, alpha_a, alpha_u, alpha_bav,
+                       gamma_bav,psi_bav,n,Ba,Bu,gamma_u)
+```
+
+
+```{r}
+
+results_un <- data.frame(matrix(nrow = N, ncol =2))
+results_naive <- data.frame(matrix(nrow = N, ncol =2))
+results_bav <- data.frame(matrix(nrow = N, ncol =2))
+
+names(results_un) <- c("Estimates","Model")
+names(results_naive) <- c("Estimates","Model")
+names(results_bav) <- c("Estimates","Model")
+
+results_un$Model <- "Y ~ A + U"
+results_naive$Model <- "Y ~ A"
+results_bav$Model <- "Y ~ A + BAV"
+
+for(i in 1:N){
+meyers_sim(sigBAV,sigY, sigA, sigU, alpha_a, alpha_u, alpha_bav,
+                       gamma_bav,psi_bav,n,Ba,Bu,gamma_u)
+  
+ mod1 <- lm(Y ~ A + U) ## unbiased model
+ mod2 <- lm(Y ~ A)     ## niave model
+ mod3 <- lm(Y ~ A + bav) ## conditional model
+  
+ results_un[i,1] <- coef(mod1)[2]
+ results_naive[i,1] <- coef(mod2)[2]
+ results_bav[i,1] <- coef(mod3)[2]
+}
+
+results <- rbind(results_un,results_naive,results_bav)
+#apply(results,2,mean)
+```
+
+```{r}
+## If the zero = TRUE, the graph will display a vertical line at zero
+## This is useful for visualizing incorrectly signed estimates 
+## with respect to the true value Ba (vertical line in blue)
+raincloud_meyers_sim(results,Ba, zero =TRUE)
+```
+
+
+And below we compare the average estimates from the simulations with the expectations (or probability limits).
+
+```{r, results = "asis", warning = FALSE}
+sim_est <- aggregate(results$Estimates, by = list(results$Model), FUN = mean)
+#sim_est
+names(sim_est) <-c("Model", "Simulated Estimates")
+out <- merge(sim_est,Meyers_Exp)
+print(xtable(out), type = "html")
+```
+
+For the expectations to be arbitrarily close increase N for any fixed $n > p$ (default $p=12$). For probability limits to be arbitrarily close, you will have to increase n. The table is generated with xtable and default is to round to 2 decimal places but this can be modified.
+
+
+### Figure 4 in the Text
+
+This figure shows the geometry of bias amplification. In particular we appeal to the FWL theorem to represent the multi-variable regression as a simple regression of a projected outcome and treatment.
+
+The figure is simulated from the following DAG and set of structural equations:
+
+
+</center>
+![DAG: Two Confounding Paths, where A is the treatment of interest, Y Is the outcoem, U is an unmeasured variable and BAV is a potential bias amplifying variable. This is figure 3 in the text](DAG1_bav.png)
+</center>
+
+\begin{align}
+\boldsymbol{Y} &= \alpha_y + \boldsymbol{A}\beta_a + \boldsymbol{U}\beta_u +\boldsymbol{BAV}\boldsymbol{\beta_{bav}} + \boldsymbol{\epsilon_1}\label{Y truth}\\
+\boldsymbol{A} &= \alpha_a + \boldsymbol{U}\gamma_u + \boldsymbol{BAV}\boldsymbol{\gamma_{bav}} + \boldsymbol{\epsilon_2}\label{A truth}
+\end{align}
+
+```{r}
+Ba <- 0.2
+Bu <- 0.5
+B_bav <- 0.05
+
+gamma_u <- 0.3
+gamma_bav <- 0.75
+
+alpha_y <- 2
+alpha_u <- 1
+
+sigY <- 1
+sigA <- 1
+sigU <- 1
+sigBAV <- 1
+
+n <- 1000
+```
+
+According to the FWL theorem, regressions from the following set of equations are numerically equivalent
+
+\begin{align}
+\boldsymbol{Y} &= \alpha_y + \boldsymbol{A}\beta_a + \boldsymbol{\upsilon_1}\label{regression1}\\
+\boldsymbol{M_{\boldsymbol{1}}Y} &= \boldsymbol{M_{\boldsymbol{1}}A}\beta_a + \boldsymbol{\upsilon_1}\label{eq:modified}
+\end{align}
+
+Here we will simulate data from the equations with the above parameters and show they are numerically equivalent. 
+
+```{r}
+normaldag_sim(Ba,Bu,B_bav,gamma_u,gamma_bav,n,alpha_a,alpha_bav,alpha_u,alpha_y,
+                          sigU,sigBAV,sigA,sigY)
+
+mod1 <- lm(Y ~ A)
+
+one <- rep(1,n)
+M1 <- diag(one) - one%*%(solve(crossprod(one)))%*%t(one)
+
+M1_Y <- M1 %*%Y
+M1_A <- M1 %*%A
+
+mod2 <- lm(M1_Y ~ -1 + M1_A)
+
+summary(mod1)
+
+summary(mod2)
+```
+
+Notice that the $\beta_a$ estimates are equivalent as well as the residual summary.
+
+Similarly regressions form the following two equations are equivalent, where $Z = [1, BAV]$:
+
+
+\begin{align}
+\boldsymbol{Y} &= \alpha_y + \boldsymbol{A}\beta_a + \boldsymbol{BAV}\beta_{bav} + \boldsymbol{\upsilon_2}\label{eq:cond2}\\ 
+\boldsymbol{M_zY} &= \boldsymbol{M_zA}\beta_a + \boldsymbol{\upsilon_2}\label{eq:cond modified}
+\end{align}
+
+```{r}
+mod3 <- lm(Y ~ A + bav)
+
+Z <- cbind(one,bav)
+MZ <- diag(one) - Z%*%(solve(crossprod(Z)))%*%t(Z)
+
+MZ_Y <- MZ%*%Y
+MZ_A <- MZ%*%A
+
+mod4 <- lm(MZ_Y ~ -1 + MZ_A)
+
+summary(mod3)
+summary(mod4)
+```
+
+
+Now we will construct the plot in figure 4 of the text
+
+```{r fig4data, echo = FALSE}
+dat1 <- data.frame(y = M1_Y, x = M1_A, model = "naive")
+dat2 <- data.frame(y = MZ_Y, x = MZ_A, model = "conditional")
+df <- rbind(dat1,dat2)
+
+plot_fig4 <- function(df, Ba){
+  ggplot(df, aes(x=x,y=y)) + geom_point(aes(col=model,alpha = 0.05)) + geom_smooth(method = "lm", aes(col = model)) + facet_wrap(~model) + geom_abline(intercept = 0, slope = Ba, col="black", size = 1)+ theme_gray() + scale_color_manual(values = c("naive" = "firebrick", "conditional" = "blue3"))
+}
+```
+
+```{r}
+plot_fig4(df,Ba)
+```
+
+
+By changing the underlying parameters you can visualize variance from the treatment and outcome being explained by the covariates in the model.
+
+
+### Figure 6
+
+There are two parts to figure 6. First the code to produce figure 6 a.
+
+
+```{r parameter setup}
+N <- 1000
+n <- 100
+
+#out_mat <- matrix(nrow=N,ncol=3,0)
+
+Ba <- .2
+Bu <- 0.3
+B_bav <- -0.05
+
+gamma_bav <- .6
+gu1 <- 0.3 # The original or control gamma_u parameter
+gu2 <- 0.55 # The treatment gamma_u
+
+
+alpha_a <- 0
+alpha_bav <- 0
+alpha_u <- 0
+alpha_y <- 0
+
+sigBAV <- 1
+sigU <- 1
+sigA <- 1
+sigY <- 1
+
+
+sigA1 <- 1 # Baseline variance
+sigA2 <- sqrt((sigA^2 + (gu2^2-gu1^2)*sigU^2)) # Floating Treatment Variance
+sigY2 <- sqrt(sigY^2 + Ba^2*(sigA2^2 - sigA1^2) + 2*Ba*Bu*sigU^2*(gu2 - gu1)) # Floating Outcome Variance
+
+
+
+```
+
+```{r fig6 setup, echo = FALSE}
+
+mat_a <- data.frame(matrix(nrow=N,ncol=3,0))
+colnames(mat_a) <- c("sim","type","model")
+mat_a[,2] <- as.character(gu1)
+mat_a[,3] <- "Y ~ A + BAV"
+
+mat_b <- data.frame(matrix(nrow = N, ncol=3,0))
+colnames(mat_b) <- c("sim", "type","model")
+mat_b[,2] <- as.character(gu2)
+mat_b[,3] <- "Y ~ A + BAV"
+
+mat_c <- data.frame(matrix(nrow = N, ncol=3,0))
+colnames(mat_c) <- c("sim","type","model")
+mat_c[,2] <- as.character((gu2 - .1))
+mat_c[,3] <- "Y ~ A + BAV"
+
+mat_a1 <- data.frame(matrix(nrow=N,ncol=3,0))
+colnames(mat_a1) <- c("sim","type","model")
+mat_a1[,2] <- as.character(gu1)
+mat_a1[,3] <- "Y ~ A"
+
+mat_b1 <- data.frame(matrix(nrow = N, ncol=3,0))
+colnames(mat_b1) <- c("sim", "type","model")
+mat_b1[,2] <- as.character(gu2)
+mat_b1[,3] <- "Y ~ A"
+
+mat_c1 <- data.frame(matrix(nrow = N, ncol=3,0))
+colnames(mat_c1) <- c("sim","type","model")
+mat_c1[,2] <- as.character((gu2 - .1))
+mat_c1[,3] <- "Y ~ A"
+```
+
+
+
+
+```{r fig6 a simulation}
+
+for(i in 1:N){
+
+  normaldag_sim(Ba,Bu,B_bav,gu1,gamma_bav,n,alpha_a,alpha_bav,alpha_u,alpha_y,
+                sigU,sigBAV,sigA1,sigY)
+  mod1 <- lm(Y ~ A + bav)
+  
+  mod_n1 <- lm(Y ~ A) 
+  
+  normaldag_sim(Ba,Bu,B_bav,gu2,gamma_bav,n,alpha_a,alpha_bav,alpha_u,alpha_y,
+                sigU,sigBAV,sigA1,sigY)
+  
+  mod2 <- lm(Y ~ A + bav)
+  mod_n2 <- lm(Y ~ A)
+  
+  normaldag_sim(Ba,Bu,B_bav,gu2,gamma_bav,n,alpha_a,alpha_bav,alpha_u,alpha_y,
+                sigU,sigBAV,sigA2,sigY2)
+  
+  mod3 <- lm(Y ~ A + bav)
+  mod_n3 <- lm(Y ~ A)
+  
+  mat_a[i,1] <- coef(mod1)[2]
+  mat_b[i,1] <- coef(mod2)[2]
+  mat_c[i,1] <- coef(mod3)[2]
+
+  
+  
+  mat_a1[i,1] <- coef(mod_n1)[2]
+  mat_b1[i,1] <- coef(mod_n2)[2]
+  mat_c1[i,1] <- coef(mod_n3)[2]
+  
+}
+
+results_fig6 <- rbind(mat_a,mat_b,mat_c,mat_a1,mat_b1,mat_c1)
+
+```
+
+```{r}
+fig6_fun(results_fig6,Ba, sigA1,sigA2,gu1,gu2)
+```
+
+
+
+
+
+
+
+```{r}
+fig_6b(mat_a,mat_a1, mat_b, mat_b1, mat_c, mat_c1, Ba,gu1,gu2,sigA1,sigA2)
+```
+
+
+
+### Real Data Simulation: Figure 8 Code
+
+First we will load the data. The data can be downloaded at the following link: https://dataverse.no/dataset.xhtml?persistentId=doi:10.18710/R2KJHK
+
+It was puplished originally as part of the study, Examining the effects of an eHealth intervention from infant age 6 to 12 months on child eating behaviors and maternal feeding practices one year after cessation: The Norwegian randomized controlled trial Early Food for Future Health by Helle et al (2019).
+
+To use this code, save the data in SPSS form from the link and call the file "food_24.sav". Of course you may download it in a different format and load it otherwise then simply code out the first line in the next block.
+
+```{r}
+df <- read.spss("food_24.sav", to.data.frame=TRUE)
+df <- as_tibble(df)
+df <- df %>% mutate(A =recode(Group, 
+                              "intervention" = 1,
+                              "control" = 0))
+
+df <- df %>% mutate(Y = df[["CEBQ_EOE"]])
+
+
+sigX <- .1
+sigX_tilda <- 1
+  
+X_mat <- data.frame(df$Age_mother,df$CFNS_score,df$CFQ_pressure)
+
+indexer <- (is.na(df$Y)==FALSE)&(is.na(df$CFNS_score)==FALSE)&(is.na(df$CFQ_pressure)==FALSE)&(is.na(df$Age_mother)==FALSE)
+
+
+cov_mat <- apply(X_mat[indexer,],2,function(x){((x-mean(x))/((1/sigX)*sd(x)))})
+X_mat <- X_mat[indexer,]
+
+Y <- df$Y[indexer]
+A <- df$A[indexer]
+
+```
+
+Now that the data has been cleaned we can run the unbiased regressions to get the baseline coefficients.
+
+```{r, results = "asis"}
+itt <- lm(Y ~ A)
+
+stargazer(itt, type = "html")
+
+```
+
+Next we can show that the added covariates do not explain variance in the treatment since it is an experiment.
+
+```{r, results = "asis"}
+treat <- lm(A ~ as.matrix(X_mat))
+
+stargazer(treat, type = "html")
+```
+And finally the outcome regression with covariates
+
+```{r, results = "asis"}
+mod_cov <- lm(Y ~ A + as.matrix(X_mat))
+
+stargazer(mod_cov, type = "html")
+
+```
+
+
+Below is the code to perform the real data sim.
+
+```{r}
+pa <- mean(A)
+
+alpha_a <- -qnorm(1-pa)
+
+cov_a_u <- .25
+sigA_star <- 1
+
+cov_a_bav <- c(.22,.15,.13) # This is the covariance we want on the observed space
+
+cov_a_bav2 <- c(.08,.15,.13)
+
+gamma_x2 <- cov_a_bav*sqrt(2*pi)*exp(alpha_a^2/(2*sigA_star^2)) ## See paper for formula for non-zero variables
+gamma_x <- cov_a_bav2*sqrt(2*pi)*exp(alpha_a^2/(2*sigA_star^2))
+
+gamma_u <- cov_a_u*sqrt(2*pi)*exp(alpha_a^2/(2*sigA_star^2))
+
+sigBAV <- sqrt(sigX_tilda^2 - sigX^2)
+sigU <- 1
+
+sigA_star1 <- sigA_star
+sigA_star2 <- sqrt(sigA^2 + (sum(gamma_x2^2) - sum(gamma_x^2))*sigX_tilda^2)
+
+
+```
+
+
+
+
+```{r}
+
+### This takes the observed treatment and simulates a latent treatment
+a_star_sim2 <- function(A,pa, alpha_a,n,sigA_star){
+
+  
+  X <- runif(n,0,1)
+  
+  y <- ((1-pa)^(1-A))*(pa^A)*X + (1-pa)*A
+  
+  a_star <- qnorm(y,mean=0,sd=sigA_star) + alpha_a
+  
+  a_star
+}
+
+```
+
+
+
+
+
+
+```{r}
+beta_fun <- function(beta_target,X,Y,A){
+  mod <- lm(Y ~ A + X)
+  p <- ncol(X)
+  beta_x <- coef(mod)[3:(3+(p-1))]
+  beta_adj <- beta_target - beta_x
+  out <- vector("list", length=2)
+  out[[1]] <- beta_adj
+  out[[2]] <- beta_x
+  out
+}
+
+```
+
+
+
+
+```{r}
+n <- length(A)
+N <- 100
+
+p <- length(gamma_x)+1
+X_mat2 <- apply(X_mat,2,function(x){((x-mean(x))/((1/sigX)*sd(x)))})
+Ba <- 0.1377
+beta_u <- 0.15
+beta_target <- c(0.1,-0.15,-0.1)
+
+
+output <- vector("list",length=N)
+output2 <- vector("list",length=N)
+output3 <- vector("list",length=N)
+output4 <- vector("list",length=N)
+output5 <- vector("list",length=N)
+output6 <- vector("list",length=N)
+output7 <- vector("list",length=N)
+output8 <- vector("list",length=N)
+output9 <- vector("list", length=N)
+output10 <- vector("list", length=N)
+
+output11 <- vector("list",length=N)
+output12 <- vector("list",length=N)
+output13 <- vector("list", length=N)
+output14 <- vector("list", length=N)
+
+output15 <-  vector("list", length=N)
+output16 <-  vector("list", length=N)
+
+output17 <-  vector("list", length=N)
+output18 <-  vector("list", length=N)
+
+
+output19 <-  vector("list", length=N)
+output20 <-  vector("list", length=N)
+output21 <-  vector("list", length=N)
+
+output22 <-  vector("list", length=N)
+output23 <-  vector("list", length=N)
+output24 <-  vector("list", length=N)
+output25 <-  vector("list", length=N)
+
+```
+
+
+```{r}
+for(j in 1:N){
+  
+  intvec <- c(1:n)
+  bootsample <- sample(intvec,n,replace=TRUE)
+  A_boot <- A[bootsample]
+  Y_boot <- Y[bootsample]
+  a_s <- a_star_sim2(A_boot,pa,alpha_a,n,sigA_star1)
+  a_s2 <- a_star_sim2(A_boot,pa,alpha_a,n,sigA_star2)
+  
+  sigBAV <- sqrt(sigX_tilda^2 - sigX^2)
+  
+  cov_boot <- cov_mat[bootsample,] 
+  
+  
+  Z <- as.matrix(data.frame(a_s,cov_boot))
+  Z2 <- as.matrix(data.frame(a_s2,cov_boot))
+
+  sig_zz <- diag(c(sigA_star^2,rep(sigX^2,3)))
+  sig_zz2 <- diag(c(sigA_star2^2,rep(sigX^2,3)))
+  
+  sig_ww <- diag(c(sigU^2,rep(sigBAV^2,ncol(X_mat2))))
+  cov_astar_X <- cov(a_s,cov_boot)
+  cov_astar_X2 <- cov(a_s2,cov_boot)
+
+  
+  cov_a_ux <- c(gamma_u*sigU^2,gamma_x*sigX_tilda^2 - 0) 
+  cov_a_ux2 <- c(gamma_u*sigU^2,gamma_x2*sigX_tilda^2 - 0)
+  
+  cov_a_ux3 <- c(gamma_u*sigU^2,gamma_x2*sigX_tilda^2 - 0)
+  
+  z_mat <- matrix(nrow = (ncol(X_mat2)+1),ncol = ncol(X_mat2),0)
+  
+  sig_wz <- as.matrix(data.frame(cov_a_ux,z_mat))
+  sig_wz2 <- as.matrix(data.frame(cov_a_ux2,z_mat))
+  
+  sig_wz3 <-  as.matrix(data.frame(cov_a_ux3,z_mat))
+  
+  sig_zw <- t(sig_wz)
+  sig_zw2 <- t(sig_wz2)
+  sig_zw3 <- t(sig_wz3)
+  
+  mu_z <- matrix(rep(c(alpha_a,rep(0,ncol(X_mat2))),n),nrow=n,byrow = T)
+  
+  mu_w <- matrix(t(sig_wz%*%solve(sig_zz)%*%t(Z - mu_z)),nrow=n)
+  mu_w2 <- matrix(t(sig_wz2%*%solve(sig_zz2)%*%t(Z2 - mu_z)),nrow=n)
+  mu_w3 <- matrix(t(sig_wz3%*%solve(sig_zz)%*%t(Z - mu_z)),nrow=n)
+  
+  sigmat <- sig_ww - sig_wz%*%solve(sig_zz)%*%sig_zw
+  sigmat2 <- sig_ww - sig_wz2%*%solve(sig_zz2)%*%sig_zw2
+  sigmat3 <- sig_ww - sig_wz3%*%solve(sig_zz)%*%sig_zw3
+  
+  UBAV <- matrix(nrow=n,ncol =p,0)
+  UBAV2 <- matrix(nrow=n,ncol =p,0)
+  UBAV3 <- matrix(nrow=n,ncol=p,0)
+  
+  for(i in 1:n){
+    UBAV[i,] <- mvrnorm(1,mu=mu_w[i,],Sigma=sigmat)
+    UBAV2[i,] <- mvrnorm(1,mu=mu_w2[i,],Sigma=sigmat2)
+    UBAV3[i,] <- mvrnorm(1,mu = mu_w3[i,],Sigma=sigmat3)
+  }
+  
+  X_tild <- UBAV[,2:4] + cov_boot
+  X_tild2 <- UBAV2[,2:4] + cov_boot
+  X_tild3 <- UBAV3[,2:4] + cov_boot
+  
+  beta_list <- beta_fun(beta_target,cov_boot,Y_boot,A_boot)
+  beta_adj <- as.matrix(beta_list[[1]])
+  beta_x <- as.matrix(beta_list[[2]])
+  
+  
+  Y_tild <- Y_boot + UBAV[,1]*beta_u + UBAV[,2:4]%*%beta_x + X_tild%*%beta_adj
+  Y_tild2 <- Y_boot + UBAV2[,1]*beta_u + UBAV2[,2:4]%*%beta_x + X_tild2%*%beta_adj
+  Y_tild3 <- Y_boot + UBAV3[,1]*beta_u + UBAV3[,2:4]%*%beta_x + X_tild3%*%beta_adj
+  
+  cov_boot2 <- cov_boot*sqrt(2)
+  
+  output[[j]] <- var(UBAV)
+  output2[[j]] <- cov_astar_X
+  mod <- lm(a_s ~ X_tild)
+  mod2 <- lm(Y_tild ~ X_tild + UBAV[,1])
+  mod3 <- lm(Y_tild ~ A_boot + X_tild + UBAV[,1])
+  mod4 <- lm(Y_tild ~ A_boot)
+  mod5 <- lm(Y_tild ~ A_boot + X_tild)
+  mod6 <- lm(Y_tild2 ~ A_boot + X_tild2 + UBAV2[,1])
+  mod7 <- lm(Y_tild2 ~ A_boot + X_tild2)
+  mod8 <- lm(Y_tild2 ~ A_boot)
+  
+  
+  mod9 <- lm(A_boot ~ X_tild + UBAV[,1])
+  mod10 <- lm(A_boot ~ X_tild2 + UBAV2[,1])
+  
+  mod11 <- lm(a_s ~ X_tild + UBAV[,1])
+  mod12 <- lm(a_s2 ~ X_tild2 + UBAV2[,1])
+  
+  mod13 <- lm(Y_tild3 ~ A_boot + X_tild3 + UBAV3[,1])
+  mod14 <- lm(Y_tild3 ~ A_boot + X_tild3)
+  mod15 <- lm(Y_tild3 ~ A_boot)
+  
+  mod16 <- lm(a_s ~ X_tild3 + UBAV3[,1])
+
+  output3[[j]] <- coef(mod)
+  output4[[j]] <- coef(mod2)
+  output5[[j]] <- coef(mod3)
+  output6[[j]] <- coef(mod4)
+  output7[[j]] <- coef(mod5)
+  output8[[j]] <- coef(mod6)
+  output9[[j]] <- coef(mod7)
+  output10[[j]] <- coef(mod8)
+  output11[[j]] <- coef(mod9)
+  output12[[j]] <- coef(mod10)
+  output13[[j]] <- var(UBAV2)
+  output14[[j]] <- cov_astar_X2
+  
+  output15[[j]] <- coef(mod11)
+  output16[[j]] <- coef(mod12)
+  
+  output17[[j]] <- coef(mod13)
+  output18[[j]] <- coef(mod14)
+  output19[[j]] <- coef(mod15)
+  
+  output20[[j]] <- coef(mod16)
+  
+  output21[[j]] <- var(UBAV3)
+  
+  output22[[j]] <- var(X_tild)
+  output23[[j]] <- var(X_tild2)
+  output24[[j]] <- var(X_tild3)
+  
+  
+  
+}
+
+```
+
+```{r}
+
+mat3 <- matrix( unlist(output3) , nrow=N, ncol = 4,byrow = T)
+mat4 <- matrix(unlist(output4),nrow=N, ncol = 5,byrow = T)
+mat5 <- matrix(unlist(output5),nrow=N, ncol = 6,byrow = T)
+mat6 <- matrix(unlist(output6),nrow=N, ncol = 2,byrow = T)
+mat7 <- matrix(unlist(output7),nrow=N, ncol = 5,byrow = T)
+mat8 <- matrix(unlist(output8),nrow=N, ncol = 6,byrow = T)
+mat9 <- matrix(unlist(output9),nrow=N,ncol = 5,byrow=T)
+mat10 <- matrix(unlist(output10),nrow=N, ncol=2,byrow=T)
+
+ 
+#mat15 <- matrix(unlist(output15),nrow=N, ncol=5,byrow=T)
+#mat16 <- matrix(unlist(output16),nrow=N, ncol=5,byrow=T)
+
+mat17 <- matrix(unlist(output17),nrow=N, ncol=6,byrow=T)
+mat18 <- matrix(unlist(output18),nrow=N, ncol=5,byrow=T)
+
+mat19 <- matrix(unlist(output19),nrow=N, ncol=2,byrow=T)
+mat20 <- matrix(unlist(output20),nrow=N, ncol=5,byrow=T)
+
+```
+
+
+
+```{r}
+
+df1 <- data.frame(Ba = mat5[,2], model = "Y ~ A + X + U",type = "Y1")
+df2 <- data.frame(Ba = mat6[,2], model = "Y ~ A",type = "Y1")
+df3 <- data.frame(Ba = mat7[,2], model = "Y ~ A + X", type = "Y1")
+
+df4 <- data.frame(Ba = mat8[,2], model = "Y ~ A + X + U", type = "Y2")
+df5 <- data.frame(Ba = mat9[,2], model = "Y ~ A + X", type = "Y2")
+df6 <- data.frame(Ba = mat10[,2], model = "Y ~ A", type = "Y2")
+
+df7 <- data.frame(Ba = mat17[,2], model = "Y ~ A + X + U", type = "Y3")
+df8 <- data.frame(Ba = mat18[,2], model = "Y ~ A + X", type = "Y3")
+df9 <- data.frame(Ba = mat19[,2], model = "Y ~ A", type = "Y3")
+
+df_full <- rbind(df1,df2,df3,df4,df5,df6,df7,df8,df9)
+
+df_full_s <- rbind(df1,df2,df3)
+
+df_f2 <- rbind(df4,df5,df6,df7,df8,df9)
+
+df_f2 <- df_f2 %>%
+  mutate(model = fct_reorder(model,Ba, .fun = 'mean'))
+
+m1 <- mean(mat5[,2])
+m2 <- mean(mat6[,2])
+m3 <- mean(mat7[,2])
+
+m4 <- mean(mat8[,2])
+m5 <- mean(mat9[,2])
+m6 <- mean(mat10[,2])
+
+m7 <- mean(mat17[,2])
+m8 <- mean(mat18[,2])
+m9 <- mean(mat19[,2])
+
+df_full2 <- df_full %>%
+  mutate(model = fct_reorder(model,Ba, .fun = 'mean'))
+
+df_full_s2 <- df_full_s %>%
+  mutate(model = fct_reorder(model,Ba, .fun = 'mean'))
+
+ggplot(df_full_s2,aes(x=model,y=Ba, fill = model,col = model))+
+  geom_flat_violin(position = position_nudge(x = .2, y = 0),adjust =
+                     2)+
+  geom_point(position = position_jitter(width = .15), size = .01,alpha=.1)+
+  ylab(TeX(paste0("$\\beta_a$", " simulation estimates")))+xlab('Group')+coord_flip()+theme_cowplot()+guides(fill = FALSE)+
+  
+  
+  geom_hline(yintercept = 0.1377,size =1)+
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5)+
+  theme(legend.position = c(0.01, 0.6))+
+  expand_limits(y= -.15) + annotate("text", label = paste0("Mean = ",round(m3,2)),x= 3.3, y= m3, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m2,2)),x= 2.3, y= m2, color = "black")+
+  annotate("text", label = paste0("Mean = ",round(m1,2)),x= 1.3, y= m1, color = "black")+
+  annotate("text", label = paste0)+
+  scale_colour_discrete(guide = guide_legend(reverse = TRUE))
+  
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, include = FALSE}
+U_bav_sim <- function(a_star,gamma_u,gamma_bav, sigU,sigBAV,sigA_star,pa,n,alpha_a){
+  
+  mu_u <- (gamma_u*sigU^2/sigA_star^2)*(a_star - alpha_a)
+  mu_bav <- (a_star -alpha_a)%*%t((gamma_bav*sigBAV^2/sigA_star^2))
+  
+  mus <- cbind(mu_u,mu_bav)
+  
+  sigvec <- c(sigU^2,rep(sigBAV^2,length(gamma_bav)))
+  gamvec <- c(gamma_u,gamma_bav)
+  
+  
+  s11 <- diag(sigvec)
+  
+  s12 <- matrix(gamvec)
+  
+  sigmat <- s11 - (1/sigA_star^2)*s12%*%t(s12)
+  
+  UBAV <- matrix(nrow=n,ncol =p,0)
+  
+  for(i in 1:n){
+  UBAV[i,] <- mvrnorm(1,mu=mus[i,],Sigma=sigmat)
+  
+  }
+
+  UBAV
+  
+}
+
+
+```
+
+```{r, include = FALSE}
+sigX_tild <- 1
+sigX <- sqrt(.5)
+
+
+X_mat2 <- X_mat[indexer,]
+X_mat2 <- apply(X_mat2,2,function(x){((x-mean(x))/((1/sigX)*sd(x)))})
+A <- df$A[indexer]
+
+Z <- data.frame(A,X_mat2)
+```
+
